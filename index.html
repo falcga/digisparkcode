@@ -16,7 +16,240 @@
         .container {
             max-width: 800px;
             margin: 0 auto;
-        …    sketch += `  DigiKeyboard.print("${trimmedLine.replace(/"/g, '\\"')}");
+            background: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        h1 {
+            text-align: center;
+            color: #444;
+            margin-bottom: 20px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        select, textarea, input[type="checkbox"] {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        textarea {
+            height: 150px;
+            font-family: monospace;
+            resize: vertical;
+        }
+        .checkbox-group {
+            display: flex;
+            gap: 15px;
+            margin-top: 10px;
+        }
+        .checkbox-group label {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-weight: normal;
+            margin-bottom: 0;
+        }
+        .checkbox-group input[type="checkbox"] {
+            width: auto;
+        }
+        .os-selector {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+        .os-option {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            width: 100%;
+            margin-top: 10px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        #output {
+            margin-top: 20px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background-color: #f0f0f0;
+            white-space: pre;
+            font-family: monospace;
+            min-height: 100px;
+        }
+        .memory-info {
+            margin-top: 10px;
+            font-size: 14px;
+            color: #666;
+        }
+        .memory-warning {
+            color: #d32f2f;
+            font-weight: bold;
+        }
+        .memory-safe {
+            color: #4CAF50;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Digispark Script Converter</h1>
+        
+        <div class="form-group">
+            <label>Выберите ОС:</label>
+            <div class="os-selector">
+                <label class="os-option">
+                    <input type="radio" name="os" value="linux" checked onchange="updateMemoryUsage()"> Linux (Bash)
+                </label>
+                <label class="os-option">
+                    <input type="radio" name="os" value="windows" onchange="updateMemoryUsage()"> Windows (PowerShell)
+                </label>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>Открыть терминал перед выполнением скрипта:</label>
+            <div class="checkbox-group">
+                <label>
+                    <input type="checkbox" id="openTerminal" checked onchange="updateMemoryUsage()"> Да
+                </label>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label for="scriptInput">Ваш скрипт (макс. ~2000 символов):</label>
+            <textarea 
+                id="scriptInput" 
+                placeholder="Вставьте ваш Bash или PowerShell скрипт сюда..."
+                oninput="updateMemoryUsage()"
+                maxlength="2000"
+            >
+# Пример для Bash:
+# echo "Hello, World!"
+# sleep 2
+
+# Пример для PowerShell:
+# Write-Host "Hello, World!"
+# Start-Sleep -Seconds 2
+            </textarea>
+            <div class="memory-info">
+                Использовано: <span id="currentMemory">0</span> / 2000 символов
+                <span id="memoryStatus" class="memory-safe"> (ОК)</span>
+            </div>
+        </div>
+
+        <button onclick="convertScript()" id="convertButton">Сконвертировать в Digispark Sketch</button>
+
+        <div class="form-group">
+            <label for="output">Результат (Digispark Sketch):</label>
+            <div id="output"></div>
+        </div>
+    </div>
+
+    <script>
+        // Ограничение по символам (приблизительная оценка для Digispark ATtiny85)
+        const MAX_SCRIPT_LENGTH = 2000;
+        
+        function updateMemoryUsage() {
+            const script = document.getElementById('scriptInput').value;
+            const currentLength = script.length;
+            const currentMemorySpan = document.getElementById('currentMemory');
+            const memoryStatusSpan = document.getElementById('memoryStatus');
+            const convertButton = document.getElementById('convertButton');
+            
+            currentMemorySpan.textContent = currentLength;
+            
+            if (currentLength > MAX_SCRIPT_LENGTH) {
+                memoryStatusSpan.textContent = ' (Слишком много!)';
+                memoryStatusSpan.className = 'memory-warning';
+                convertButton.disabled = true;
+            } else {
+                memoryStatusSpan.textContent = ' (ОК)';
+                memoryStatusSpan.className = 'memory-safe';
+                convertButton.disabled = false;
+            }
+        }
+
+        function optimizeScript(script) {
+            // Удаляем комментарии
+            let optimized = script.replace(/\/\/.*|#.*/g, '');
+            
+            // Удаляем пустые строки
+            optimized = optimized.split('\n')
+                .filter(line => line.trim() !== '')
+                .join('\n');
+            
+            // Удаляем лишние пробелы
+            optimized = optimized.replace(/\s+/g, ' ').trim();
+            
+            return optimized;
+        }
+
+        function convertScript() {
+            const os = document.querySelector('input[name="os"]:checked').value;
+            const openTerminal = document.getElementById('openTerminal').checked;
+            let script = document.getElementById('scriptInput').value;
+            const output = document.getElementById('output');
+            
+            // Оптимизируем скрипт, если он близок к лимиту
+            if (script.length > MAX_SCRIPT_LENGTH * 0.8) {
+                script = optimizeScript(script);
+            }
+
+            let sketch = `// Digispark Sketch
+// Generated from ${os === 'linux' ? 'Bash' : 'PowerShell'} script
+
+#include "DigiKeyboard.h"
+
+void setup() {
+  DigiKeyboard.delay(1000);
+`;
+
+            if (openTerminal) {
+                if (os === 'linux') {
+                    sketch += `  // Open terminal (Linux)
+  DigiKeyboard.sendKeyStroke(0, MOD_CONTROL_LEFT | MOD_ALT_LEFT, KEY_T);
+  DigiKeyboard.delay(500);
+`;
+                } else {
+                    sketch += `  // Open terminal (Windows)
+  DigiKeyboard.sendKeyStroke(KEY_R, MOD_GUI_LEFT);
+  DigiKeyboard.delay(500);
+  DigiKeyboard.print("cmd");
+  DigiKeyboard.sendKeyStroke(KEY_ENTER);
+  DigiKeyboard.delay(500);
+`;
+                }
+            }
+
+            // Конвертация строк скрипта
+            const lines = script.split('\n');
+            lines.forEach(line => {
+                const trimmedLine = line.trim();
+                if (trimmedLine) {
+                    sketch += `  DigiKeyboard.print("${trimmedLine.replace(/"/g, '\\"')}");
   DigiKeyboard.sendKeyStroke(KEY_ENTER);
   DigiKeyboard.delay(500);
 `;
